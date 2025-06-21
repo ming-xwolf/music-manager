@@ -1,0 +1,21 @@
+{
+  "enabled": true,
+  "default_provider": "ollama",
+  "deepseek": {
+    "api_key": "",
+    "api_base": "https://api.deepseek.com/v1",
+    "model": "deepseek-chat",
+    "enabled": false
+  },
+  "ollama": {
+    "api_base": "http://localhost:11434",
+    "model": "qwen2.5:7b",
+    "enabled": true
+  },
+  "analysis": {
+    "confidence_threshold": 0.4,
+    "max_song_name_length": 20,
+    "default_language": "国语",
+    "skip_standard_format": true
+  }
+}
