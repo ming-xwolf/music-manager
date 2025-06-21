@@ -198,7 +198,7 @@ class AudioFileManager:
     
     def _get_llm_suggestion_sort_key(self, file_info: Dict) -> str:
         """
-        获取LLM建议的排序键
+        获取LLM建议的排序键（基于完整的LLM建议文件名）
         
         Args:
             file_info: 文件信息字典
@@ -206,31 +206,38 @@ class AudioFileManager:
         Returns:
             LLM建议的排序键
         """
-        genai_analysis = file_info.get('genai_analysis')
-        
-        # 如果没有GenAI分析结果，使用原文件名
-        if not genai_analysis:
-            return self.get_pinyin_sort_key(file_info['original_name'])
-        
-        # 如果已经是标准格式，使用原文件名
-        if genai_analysis.get('is_standard_format', False):
-            return self.get_pinyin_sort_key(file_info['original_name'])
-        
-        # 如果有错误，将错误的文件排在最后
-        if 'error' in genai_analysis:
-            return 'zzz_error_' + self.get_pinyin_sort_key(file_info['original_name'])
-        
-        # 使用LLM建议的文件名
-        suggested_name = genai_analysis.get('suggested_name', '')
-        if suggested_name:
+        # 优先使用LLM建议的完整文件名
+        llm_suggested_name = file_info.get('llm_suggested_name', '')
+        if llm_suggested_name:
             try:
-                # 使用拼音排序
-                pinyin_list = lazy_pinyin(suggested_name, style=Style.NORMAL)
+                # 使用拼音排序LLM建议的完整文件名
+                pinyin_list = lazy_pinyin(llm_suggested_name, style=Style.NORMAL)
                 return ' '.join(pinyin_list).lower()
             except:
-                return suggested_name.lower()
+                return llm_suggested_name.lower()
         
-        # 如果没有建议，使用原文件名
+        # 如果没有LLM建议的文件名，检查GenAI分析结果
+        genai_analysis = file_info.get('genai_analysis')
+        if genai_analysis:
+            # 如果已经是标准格式，使用原文件名
+            if genai_analysis.get('is_standard_format', False):
+                return self.get_pinyin_sort_key(file_info['original_name'])
+            
+            # 如果有错误，将错误的文件排在最后
+            if 'error' in genai_analysis:
+                return 'zzz_error_' + self.get_pinyin_sort_key(file_info['original_name'])
+            
+            # 使用GenAI分析中的建议文件名（格式：歌手-语言-歌曲名）
+            suggested_name = genai_analysis.get('suggested_name', '')
+            if suggested_name:
+                try:
+                    # 使用拼音排序
+                    pinyin_list = lazy_pinyin(suggested_name, style=Style.NORMAL)
+                    return ' '.join(pinyin_list).lower()
+                except:
+                    return suggested_name.lower()
+        
+        # 如果没有任何AI建议，使用原文件名
         return self.get_pinyin_sort_key(file_info['original_name'])
     
     def get_audio_files(self, folder_path: str) -> List[str]:
@@ -473,7 +480,8 @@ class AudioFileManager:
         # 按照用户选择的方式排序
         file_items.sort(key=sort_key, reverse=reverse)
         
-        # 按照新的排序顺序分配序号
+        # 按照新的排序顺序分配序号并更新result['files']的顺序
+        sorted_files = []
         for index, item in enumerate(file_items, 1):
             file_info = item['file_info']
             clean_name = item['clean_name']
@@ -490,6 +498,12 @@ class AudioFileManager:
             else:
                 # 使用传统方式：序号 + 去除前缀的原文件名
                 file_info['suggested_name'] = f"{index:02d}-{clean_name}"
+            
+            # 添加到排序后的文件列表
+            sorted_files.append(file_info)
+        
+        # 更新result['files']为排序后的顺序
+        result['files'] = sorted_files
     
     def _count_files_needing_rename(self, result: Dict) -> int:
         """统计实际需要重命名的文件数量"""
