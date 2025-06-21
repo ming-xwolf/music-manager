@@ -117,23 +117,50 @@ class AudioFileManager:
         # 检查提供者是否可用
         try:
             provider_available = self.filename_analyzer.llm_provider.is_available()
+            provider_name = self.filename_analyzer.llm_provider.get_provider_name()
+            
+            # 获取当前使用的模型名称
+            model_name = self._get_current_model_name()
+            
             if provider_available:
-                provider_name = self.filename_analyzer.llm_provider.get_provider_name()
                 return {
                     "status": "available",
-                    "message": f"GenAI可用 ({provider_name})"
+                    "message": f"GenAI可用 ({provider_name})",
+                    "provider": provider_name,
+                    "model": model_name
                 }
             else:
-                provider_name = self.filename_analyzer.llm_provider.get_provider_name()
                 return {
                     "status": "provider_unavailable",
-                    "message": f"{provider_name} 服务不可用"
+                    "message": f"{provider_name} 服务不可用",
+                    "provider": provider_name,
+                    "model": model_name
                 }
         except Exception as e:
             return {
                 "status": "error",
                 "message": f"检查服务状态时出错: {str(e)}"
             }
+    
+    def _get_current_model_name(self) -> str:
+        """获取当前使用的模型名称"""
+        try:
+            if self.filename_analyzer and self.filename_analyzer.llm_provider:
+                # 尝试从提供者获取模型名称
+                if hasattr(self.filename_analyzer.llm_provider, 'model'):
+                    return self.filename_analyzer.llm_provider.model
+                elif hasattr(self.filename_analyzer.llm_provider, 'config'):
+                    return getattr(self.filename_analyzer.llm_provider.config, 'model', '未知模型')
+            
+            # 如果无法从提供者获取，尝试从配置管理器获取
+            if self.config_manager:
+                provider_info = self.config_manager.get_active_provider_config()
+                if provider_info and 'config' in provider_info:
+                    return getattr(provider_info['config'], 'model', '未知模型')
+            
+            return '未知模型'
+        except Exception:
+            return '未知模型'
 
     def is_audio_file(self, filename: str) -> bool:
         """检查文件是否为音频文件"""

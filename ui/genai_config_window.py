@@ -7,7 +7,9 @@ GenAI配置窗口
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
-from typing import Dict, Optional
+from typing import Dict, Optional, List
+import requests
+import threading
 
 try:
     from genai.config import ConfigManager
@@ -231,18 +233,49 @@ class GenAIConfigWindow(ctk.CTkToplevel):
         )
         self.ollama_api_base_entry.pack(fill="x", padx=10, pady=(0, 10))
         
-        # 模型
+        # 模型选择
         ollama_model_frame = ctk.CTkFrame(ollama_frame)
         ollama_model_frame.pack(fill="x", padx=15, pady=(0, 15))
         
-        ollama_model_label = ctk.CTkLabel(ollama_model_frame, text="模型:")
-        ollama_model_label.pack(anchor="w", padx=10, pady=(10, 5))
+        # 模型标签和刷新按钮
+        model_header_frame = ctk.CTkFrame(ollama_model_frame)
+        model_header_frame.pack(fill="x", padx=10, pady=(10, 5))
         
-        self.ollama_model_entry = ctk.CTkEntry(
-            ollama_model_frame,
-            placeholder_text="qwen2.5:7b"
+        ollama_model_label = ctk.CTkLabel(model_header_frame, text="模型:")
+        ollama_model_label.pack(side="left")
+        
+        self.refresh_models_button = ctk.CTkButton(
+            model_header_frame,
+            text="🔄 刷新模型列表",
+            command=self._refresh_ollama_models,
+            width=120,
+            height=28,
+            font=ctk.CTkFont(size=12)
         )
-        self.ollama_model_entry.pack(fill="x", padx=10, pady=(0, 10))
+        self.refresh_models_button.pack(side="right")
+        
+        # 模型选择下拉框
+        self.ollama_model_var = tk.StringVar(value="qwen2.5:7b")
+        self.ollama_model_menu = ctk.CTkOptionMenu(
+            ollama_model_frame,
+            variable=self.ollama_model_var,
+            values=["qwen2.5:7b", "llama3.2:3b", "llama3.1:8b", "gemma2:2b"],
+            width=200
+        )
+        self.ollama_model_menu.pack(fill="x", padx=10, pady=(0, 5))
+        
+        # 自定义模型输入框
+        custom_model_frame = ctk.CTkFrame(ollama_model_frame)
+        custom_model_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        custom_model_label = ctk.CTkLabel(custom_model_frame, text="或输入自定义模型:")
+        custom_model_label.pack(anchor="w", pady=(5, 2))
+        
+        self.ollama_custom_model_entry = ctk.CTkEntry(
+            custom_model_frame,
+            placeholder_text="例如: llama3.2:latest"
+        )
+        self.ollama_custom_model_entry.pack(fill="x", pady=(0, 5))
         
     def _create_buttons(self, parent):
         """创建按钮区域"""
@@ -280,6 +313,72 @@ class GenAIConfigWindow(ctk.CTkToplevel):
         )
         self.cancel_button.pack(side="left", padx=(10, 20), pady=10)
         
+    def _refresh_ollama_models(self):
+        """刷新Ollama模型列表"""
+        def fetch_models():
+            try:
+                # 获取当前API基础URL
+                api_base = self.ollama_api_base_entry.get().strip() or "http://localhost:11434"
+                
+                # 发送请求获取模型列表
+                response = requests.get(f"{api_base}/api/tags", timeout=5)
+                response.raise_for_status()
+                
+                data = response.json()
+                models = []
+                
+                if 'models' in data:
+                    for model in data['models']:
+                        if 'name' in model:
+                            models.append(model['name'])
+                
+                # 在主线程中更新UI
+                self.after(0, lambda: self._update_model_list(models))
+                
+            except requests.exceptions.RequestException as e:
+                # 连接失败时的处理
+                self.after(0, lambda: self._handle_model_fetch_error(str(e)))
+            except Exception as e:
+                self.after(0, lambda: self._handle_model_fetch_error(f"解析响应失败: {str(e)}"))
+        
+        # 更新按钮状态
+        self.refresh_models_button.configure(text="🔄 获取中...", state="disabled")
+        
+        # 在后台线程中获取模型列表
+        thread = threading.Thread(target=fetch_models, daemon=True)
+        thread.start()
+    
+    def _update_model_list(self, models: List[str]):
+        """更新模型列表"""
+        try:
+            if models:
+                # 保存当前选中的模型
+                current_model = self.ollama_model_var.get()
+                
+                # 更新下拉框选项
+                self.ollama_model_menu.configure(values=models)
+                
+                # 如果当前模型在新列表中，保持选中状态
+                if current_model in models:
+                    self.ollama_model_var.set(current_model)
+                else:
+                    # 否则选择第一个模型
+                    self.ollama_model_var.set(models[0])
+                
+                messagebox.showinfo("成功", f"成功获取到 {len(models)} 个模型")
+            else:
+                messagebox.showwarning("警告", "未找到任何模型，请检查Ollama是否正常运行")
+                
+        except Exception as e:
+            messagebox.showerror("错误", f"更新模型列表失败: {str(e)}")
+        finally:
+            self.refresh_models_button.configure(text="🔄 刷新模型列表", state="normal")
+    
+    def _handle_model_fetch_error(self, error_msg: str):
+        """处理模型获取错误"""
+        messagebox.showerror("错误", f"获取模型列表失败: {error_msg}")
+        self.refresh_models_button.configure(text="🔄 刷新模型列表", state="normal")
+        
     def load_current_config(self):
         """加载当前配置"""
         config = self.config_manager.get_config()
@@ -297,7 +396,7 @@ class GenAIConfigWindow(ctk.CTkToplevel):
         # Ollama设置
         self.ollama_enable_var.set(config.ollama.enabled)
         self.ollama_api_base_entry.insert(0, config.ollama.api_base)
-        self.ollama_model_entry.insert(0, config.ollama.model)
+        self.ollama_model_var.set(config.ollama.model)
         
         self._update_ui_state()
         
@@ -318,7 +417,9 @@ class GenAIConfigWindow(ctk.CTkToplevel):
             self.deepseek_model_entry,
             self.ollama_enable_switch,
             self.ollama_api_base_entry,
-            self.ollama_model_entry
+            self.ollama_model_menu,
+            self.ollama_custom_model_entry,
+            self.refresh_models_button
         ]
         
         for widget in widgets_to_toggle:
@@ -378,6 +479,17 @@ class GenAIConfigWindow(ctk.CTkToplevel):
             messagebox.showerror("错误", f"测试连接时出错: {str(e)}")
         finally:
             self.test_button.configure(text="测试连接", state="normal")
+    
+    def _get_selected_ollama_model(self) -> str:
+        """获取选中的Ollama模型"""
+        # 优先使用自定义模型输入框的内容
+        custom_model = self.ollama_custom_model_entry.get().strip()
+        if custom_model:
+            return custom_model
+        
+        # 否则使用下拉框选中的模型
+        selected_model = self.ollama_model_var.get().strip()
+        return selected_model or "qwen2.5:7b"
             
     def _get_current_form_data(self) -> Optional[Dict]:
         """获取当前表单数据"""
@@ -400,7 +512,7 @@ class GenAIConfigWindow(ctk.CTkToplevel):
             "ollama": {
                 "enabled": self.ollama_enable_var.get(),
                 "api_base": self.ollama_api_base_entry.get().strip() or "http://localhost:11434",
-                "model": self.ollama_model_entry.get().strip() or "qwen2.5:7b"
+                "model": self._get_selected_ollama_model()
             }
         }
         

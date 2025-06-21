@@ -1,0 +1,39 @@
+# Cursor Rules for Music Manager Project
+
+## Python Environment Management
+- **ALWAYS activate the conda environment before running Python commands**
+- The project uses conda environment named: `music-manager`
+- Before any `python` command, use: `conda activate music-manager && python ...`
+- Never run `python` commands directly without activating the environment first
+
+## Required Commands Format
+```bash
+# ✅ Correct way to run Python commands
+conda activate music-manager && python main.py
+conda activate music-manager && python test_script.py
+conda activate music-manager && pip install package_name
+
+# ❌ Wrong way - will cause ModuleNotFoundError
+python main.py
+python test_script.py
+```
+
+## Environment Dependencies
+- The project requires specific Python packages that are only available in the `music-manager` environment
+- Key dependencies include: pypinyin, customtkinter, requests, etc.
+- Running Python commands in the base environment will result in import errors
+
+## Shell Commands
+- When using `run_terminal_cmd`, always include environment activation
+- Use the format: `conda activate music-manager && your_python_command`
+- This ensures all dependencies are available and the code runs correctly
+
+## Testing and Development
+- All Python scripts must be run within the activated environment
+- This includes main application, test scripts, and utility scripts
+- Environment activation is mandatory for proper functionality
+
+## Error Prevention
+- Following these rules prevents `ModuleNotFoundError` issues
+- Ensures consistent behavior across different development sessions
+- Maintains proper dependency isolation 

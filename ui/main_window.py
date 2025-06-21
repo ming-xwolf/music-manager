@@ -235,6 +235,8 @@ class MusicManagerMainWindow(ctk.CTk):
             status_info = self.audio_manager.get_genai_status()
             status = status_info.get("status", "unknown")
             message = status_info.get("message", "未知状态")
+            provider = status_info.get("provider", "")
+            model = status_info.get("model", "")
             
             # 根据状态设置不同的颜色
             color_map = {
@@ -248,8 +250,15 @@ class MusicManagerMainWindow(ctk.CTk):
             }
             
             color = color_map.get(status, "gray")
+            
+            # 构建状态文本，包含模型信息
+            if status in ["available", "provider_unavailable"] and provider and model:
+                status_text = f"GenAI状态: {message} | 模型: {model}"
+            else:
+                status_text = f"GenAI状态: {message}"
+            
             self.genai_status_label.configure(
-                text=f"GenAI状态: {message}",
+                text=status_text,
                 text_color=color
             )
         else:
